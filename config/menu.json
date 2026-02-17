@@ -184,17 +184,17 @@
           "description": "配置数据库连接参数"
         },
         {
-          "id": "sql_console",
-          "name": "SQL 控制台",
+          "id": "db_ops_dashboard",
+          "name": "运维仪表盘",
           "type": "plugin",
           "action": {
-            "module_path": "sql_console.console",
-            "class_name": "SQLConsoleWidget",
+            "module_path": "db_ops.dashboard",
+            "class_name": "DatabaseOpsWidget",
             "params": {
-              "title": "SQL 执行控制台"
+              "title": "数据库运维仪表盘"
             }
           },
-          "description": "执行 SQL 查询并查看结果"
+          "description": "数据库运维操作面板（死锁、Binlog、数据泵等）"
         }
       ]
     }

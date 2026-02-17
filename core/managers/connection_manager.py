@@ -8,8 +8,18 @@
     profiles = manager.load_profiles()
     manager.save_profile("prod_mysql", "192.168.1.100", 3306, "admin", "password", "mysql")
 
-依赖安装:
+依赖安装 (Phase 5 扩展):
+    # 基础依赖
     pip install sqlalchemy pymysql
+    
+    # Oracle 支持 (Oracle 12c+ 使用 thin mode，无需 instant client)
+    pip install oracledb
+    
+    # SQL Server 支持
+    pip install pymssql
+    
+    # MongoDB 支持
+    pip install pymongo
 
 注意:
     当前版本密码使用明文存储，生产环境建议使用加密存储 (如 keyring 库或系统密钥管理)
@@ -54,8 +64,28 @@ class ConnectionManager:
     # 默认配置文件路径
     DEFAULT_CONFIG_PATH = "config/connections.json"
     
-    # 支持的的数据库类型
-    SUPPORTED_DB_TYPES = ["mysql", "postgresql", "sqlite", "mssql", "oracle"]
+    # 支持的数据库类型 (Phase 5 扩展)
+    # mysql: MySQL 5.7+ / 8.0+
+    # mariadb: MariaDB 10.3+
+    # sqlserver: SQL Server 2016+ (使用 pymssql)
+    # oracle: Oracle 12c+ (使用 oracledb thin mode)
+    # mongodb: MongoDB 4.0+ (使用 pymongo)
+    SUPPORTED_DB_TYPES = [
+        "mysql",
+        "mariadb", 
+        "sqlserver",
+        "oracle",
+        "mongodb"
+    ]
+    
+    # 数据库类型显示名称映射
+    DB_TYPE_DISPLAY_NAMES = {
+        "mysql": "MySQL",
+        "mariadb": "MariaDB",
+        "sqlserver": "SQL Server",
+        "oracle": "Oracle",
+        "mongodb": "MongoDB"
+    }
     
     def __init__(self, config_path: Optional[str] = None):
         """

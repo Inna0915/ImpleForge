@@ -2,17 +2,17 @@
   "version": "1.0",
   "profiles": [
     {
-      "id": "d63a25f2",
+      "id": "e9d97755",
       "name": "mysql",
       "host": "localhost",
       "port": 3306,
       "username": "root",
       "password": "root",
       "db_type": "mysql",
-      "database": "",
-      "updated_at": "2026-02-18T06:58:19.998879",
+      "database": "wms325",
+      "updated_at": "2026-02-18T07:05:32.916968",
       "created_at": "2026-02-18T06:58:19.998879"
     }
   ],
-  "last_updated": "2026-02-18T06:58:19.998879"
+  "last_updated": "2026-02-18T07:05:32.916968"
 }
