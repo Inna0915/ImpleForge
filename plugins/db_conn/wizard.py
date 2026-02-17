@@ -21,6 +21,7 @@ from PySide6.QtGui import QFont
 
 from core.managers.connection_manager import ConnectionManager
 from core.utils.db_tester import test_db_connection, DBTestWorker
+from core.importers.yaml_importer import YamlConfigImporter
 
 
 class ConnectionWizard(QWidget):
@@ -171,6 +172,20 @@ class ConnectionWizard(QWidget):
         
         # 按钮
         btn_layout = QHBoxLayout()
+        self.import_btn = QPushButton("📂 导入 YAML")
+        self.import_btn.setToolTip("从 application.yml 或配置文件导入")
+        self.import_btn.clicked.connect(self._on_import_yaml)
+        self.import_btn.setStyleSheet("""
+            QPushButton {
+                background-color: #238636;
+                color: white;
+                padding: 10px 20px;
+                border: none;
+                border-radius: 4px;
+            }
+            QPushButton:hover { background-color: #2ea043; }
+        """)
+        
         self.test_btn = QPushButton("🚀 测试连接")
         self.test_btn.clicked.connect(self._on_test)
         self.save_btn = QPushButton("💾 保存")
@@ -178,6 +193,7 @@ class ConnectionWizard(QWidget):
         self.new_btn = QPushButton("➕ 新建")
         self.new_btn.clicked.connect(self._on_new)
         
+        btn_layout.addWidget(self.import_btn)
         btn_layout.addWidget(self.test_btn)
         btn_layout.addWidget(self.save_btn)
         btn_layout.addWidget(self.new_btn)
@@ -372,6 +388,90 @@ class ConnectionWizard(QWidget):
         self.service_radio.setChecked(True)
         self.oracle_value_input.setText("ORCL")
         self.status_label.setText("新建配置")
+    
+    def _on_import_yaml(self):
+        """从 YAML 文件导入配置"""
+        file_path, _ = QFileDialog.getOpenFileName(
+            self,
+            "选择 YAML 配置文件",
+            "",
+            "YAML Files (*.yml *.yaml);;All Files (*)",
+        )
+        
+        if not file_path:
+            return
+        
+        try:
+            importer = YamlConfigImporter()
+            config = importer.parse(file_path)
+            
+            # 填充表单
+            self._fill_form_from_config(config)
+            
+            # 设置配置名称（从文件名推断）
+            filename = Path(file_path).stem
+            self.name_input.setText(f"{filename}_imported")
+            
+            # 显示成功提示
+            self.status_label.setText(f"已从 {Path(file_path).name} 加载配置")
+            self.status_label.setStyleSheet("color: #4ec9b0;")
+            
+            QMessageBox.information(
+                self,
+                "导入成功",
+                f"已从 {Path(file_path).name} 加载数据库配置\n\n"
+                f"类型: {config.get('type', 'unknown')}\n"
+                f"主机: {config.get('host', 'localhost')}\n"
+                f"端口: {config.get('port', 3306)}\n\n"
+                f"请检查信息并点击 [保存] 存储配置。"
+            )
+            
+        except ImportError as e:
+            QMessageBox.warning(
+                self,
+                "缺少依赖",
+                f"{e}\n\n请执行: pip install PyYAML"
+            )
+        except Exception as e:
+            QMessageBox.warning(
+                self,
+                "导入失败",
+                f"无法解析配置文件:\n{str(e)}\n\n"
+                f"请确保文件包含有效的数据库连接信息:\n"
+                f"- JDBC URL (如 jdbc:mysql://host:port/db)\n"
+                f"- 或 host/port/user 等字段"
+            )
+    
+    def _fill_form_from_config(self, config: dict):
+        """根据配置字典填充表单"""
+        # 数据库类型
+        db_type = config.get('type', 'mysql').lower()
+        type_index = self.type_combo.findData(db_type)
+        if type_index >= 0:
+            self.type_combo.setCurrentIndex(type_index)
+        
+        # 基本配置
+        self.host_input.setText(config.get('host', 'localhost'))
+        self.port_input.setValue(config.get('port', 3306))
+        self.username_input.setText(config.get('username', ''))
+        self.password_input.setText(config.get('password', ''))
+        
+        # 数据库特定配置
+        if db_type in ['mysql', 'mariadb', 'sqlserver']:
+            self.dbname_input.setText(config.get('database', ''))
+        elif db_type == 'mongodb':
+            self.auth_source_input.setText(config.get('auth_source', 'admin'))
+        elif db_type == 'oracle':
+            # Oracle 特殊处理
+            oracle_mode = config.get('oracle_mode', 'service_name')
+            oracle_value = config.get('oracle_value', config.get('database', 'ORCL'))
+            
+            if oracle_mode == 'sid':
+                self.sid_radio.setChecked(True)
+            else:
+                self.service_radio.setChecked(True)
+            
+            self.oracle_value_input.setText(oracle_value)
 
 
 if __name__ == "__main__":

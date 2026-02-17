@@ -2,7 +2,7 @@
   "version": "1.0",
   "profiles": [
     {
-      "id": "2165cc42",
+      "id": "90a0e932",
       "name": "mysql",
       "host": "localhost",
       "port": 3306,
@@ -10,9 +10,12 @@
       "password": "root",
       "db_type": "mysql",
       "database": "wms325",
-      "updated_at": "2026-02-18T07:22:35.397572",
+      "updated_at": "2026-02-18T07:43:04.340067",
+      "auth_source": "",
+      "oracle_mode": "",
+      "oracle_value": "",
       "created_at": "2026-02-18T06:58:19.998879"
     }
   ],
-  "last_updated": "2026-02-18T07:22:35.397572"
+  "last_updated": "2026-02-18T07:43:04.340067"
 }
