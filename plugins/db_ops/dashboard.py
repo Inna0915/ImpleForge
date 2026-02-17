@@ -1,11 +1,11 @@
 """
-数据库运维仪表盘插件 - Phase 5 (修订版)
+数据库运维仪表盘插件 - Phase 6 (执行版)
 
 功能：
 - 选择已保存的数据库连接
 - 根据数据库类型动态显示支持的运维操作按钮
+- 真实执行 SQL 查询并显示结果
 - 支持 Oracle 数据泵导入导出
-- 显示操作结果
 
 依赖安装:
     # Oracle 支持 (12c+ thin mode)
@@ -43,6 +43,7 @@ from PySide6.QtWidgets import (
     QTableWidgetItem,
     QAbstractItemView,
     QSplitter,
+    QStackedWidget,
     QApplication,
     QSizePolicy
 )
@@ -55,6 +56,8 @@ from core.strategies.db_ops import (
     is_capability_supported,
     get_db_capabilities
 )
+from core.strategies.sql_registry import SQLRegistry
+from core.workers.db_ops_worker import DBOpsWorker
 
 
 class DatabaseOpsWidget(QWidget):
@@ -83,6 +86,9 @@ class DatabaseOpsWidget(QWidget):
         self.connection_manager = ConnectionManager()
         self.current_profile: dict = None
         self.current_db_type: str = ""
+        
+        # 工作线程
+        self.db_worker: DBOpsWorker = None
         
         self._setup_ui()
         self._apply_styles()
@@ -229,17 +235,25 @@ class DatabaseOpsWidget(QWidget):
         
         self.splitter.addWidget(ops_widget)
         
-        # ---------- 结果区 ----------
+        # ---------- 结果区 (使用 QStackedWidget) ----------
         result_widget = QWidget()
         result_layout = QVBoxLayout(result_widget)
         result_layout.setContentsMargins(0, 0, 0, 0)
         result_layout.setSpacing(10)
         
-        # 结果标签
+        # 结果标签和工具栏
         result_header = QHBoxLayout()
         self.result_label = QLabel("操作结果")
         self.result_label.setStyleSheet("color: #969696; font-weight: bold;")
         result_header.addWidget(self.result_label)
+        
+        # 显示模式标签
+        self.result_mode_label = QLabel("[文本模式]")
+        self.result_mode_label.setStyleSheet("color: #569cd6; font-size: 11px;")
+        self.result_mode_label.setVisible(False)
+        result_header.addWidget(self.result_mode_label)
+        
+        result_header.addStretch()
         
         # 清除结果按钮
         self.clear_result_btn = QPushButton("🗑 清除")
@@ -247,16 +261,18 @@ class DatabaseOpsWidget(QWidget):
         self.clear_result_btn.clicked.connect(self._clear_results)
         result_header.addWidget(self.clear_result_btn)
         
-        result_header.addStretch()
         result_layout.addLayout(result_header)
         
-        # 结果显示（文本）
+        # QStackedWidget 用于切换文本/表格显示
+        self.result_stack = QStackedWidget()
+        
+        # Page 0: 文本结果显示
         self.result_text = QTextEdit()
         self.result_text.setReadOnly(True)
-        self.result_text.setPlaceholderText("操作结果将在此显示...")
-        result_layout.addWidget(self.result_text)
+        self.result_text.setPlaceholderText("操作结果将在此显示...\n\n点击上方运维按钮执行查询")
+        self.result_stack.addWidget(self.result_text)
         
-        # 结果表格（查询结果）
+        # Page 1: 表格结果显示
         self.result_table = QTableWidget()
         self.result_table.setColumnCount(0)
         self.result_table.setRowCount(0)
@@ -264,8 +280,11 @@ class DatabaseOpsWidget(QWidget):
         self.result_table.setEditTriggers(QAbstractItemView.NoEditTriggers)
         self.result_table.setSelectionBehavior(QAbstractItemView.SelectRows)
         self.result_table.horizontalHeader().setStretchLastSection(True)
-        self.result_table.setVisible(False)
-        result_layout.addWidget(self.result_table)
+        self.result_table.horizontalHeader().setDefaultSectionSize(120)
+        self.result_table.verticalHeader().setDefaultSectionSize(25)
+        self.result_stack.addWidget(self.result_table)
+        
+        result_layout.addWidget(self.result_stack)
         
         self.splitter.addWidget(result_widget)
         
@@ -385,6 +404,8 @@ class DatabaseOpsWidget(QWidget):
                 border: 1px solid #007acc;
             }
         """)
+        
+        # QStackedWidget 无特殊样式
         
         # 结果显示区
         self.result_text.setStyleSheet("""
@@ -580,43 +601,60 @@ class DatabaseOpsWidget(QWidget):
             self.result_label.setText("操作结果 / 数据泵日志")
     
     def _on_operation_click(self, operation_id: str) -> None:
-        """操作按钮点击"""
+        """操作按钮点击 - 执行实际 SQL 查询"""
         if not self.current_profile:
+            QMessageBox.warning(self, "未选择连接", "请先选择并连接数据库")
             return
         
-        # 模拟执行操作
-        self._log_message(f"执行操作: {operation_id}")
-        self._log_message(f"数据库类型: {self.current_db_type}")
-        self._log_message(f"连接: {self.current_profile.get('name', '')}")
+        # 从 SQL 注册表获取 SQL
+        sql_def = SQLRegistry.get_sql(self.current_db_type, operation_id)
         
-        # 根据操作类型显示不同消息
-        messages = {
-            "deadlock": "正在查询死锁信息...\n（后续 Phase 将实现具体 SQL 执行）",
-            "binlog": "正在获取 Binlog 状态...\n（后续 Phase 将实现具体 SQL 执行）",
-            "processlist": "正在获取进程列表...\n（后续 Phase 将实现具体 SQL 执行）",
-            "replication": "正在查询复制状态...\n（后续 Phase 将实现具体 SQL 执行）",
-            "slow_query": "正在分析慢查询...\n（后续 Phase 将实现具体 SQL 执行）",
-            "table_stats": "正在获取表统计信息...\n（后续 Phase 将实现具体 SQL 执行）",
-            "kill_session": "正在获取会话列表（请选择要终止的会话）...\n（后续 Phase 将实现具体 SQL 执行）",
-            "awr": "正在生成 AWR 报告...\n（后续 Phase 将实现具体 SQL 执行）",
-            "tablespace": "正在查询表空间使用情况...\n（后续 Phase 将实现具体 SQL 执行）",
-            "oplog": "正在查询 Oplog 状态...\n（后续 Phase 将实现具体 SQL 执行）",
-            "replica_status": "正在查询副本集状态...\n（后续 Phase 将实现具体 SQL 执行）",
-            "dmv": "正在查询 DMV...\n（后续 Phase 将实现具体 SQL 执行）",
-        }
+        if not sql_def:
+            QMessageBox.warning(
+                self, 
+                "不支持的操作", 
+                f"数据库类型 '{self.current_db_type}' 不支持操作 '{operation_id}'"
+            )
+            return
         
-        msg = messages.get(operation_id, f"操作 '{operation_id}' 执行中...")
-        self._log_message(msg)
+        sql_text = sql_def.get("sql", "")
+        result_type = sql_def.get("result_type", "table")
+        timeout = sql_def.get("timeout", 10)
+        description = sql_def.get("description", "")
         
-        # 实际执行时，这里会调用具体的 SQL 执行逻辑
-        QMessageBox.information(
-            self,
-            "操作执行",
-            f"操作 '{operation_id}' 已触发\n\n"
-            f"数据库: {self.current_profile.get('name', '')}\n"
-            f"类型: {self.current_db_type}\n\n"
-            f"（具体 SQL 执行逻辑将在后续 Phase 实现）"
+        # 停止之前的查询
+        if self.db_worker and self.db_worker.is_running():
+            self.db_worker.stop()
+        
+        # 更新状态
+        self._set_executing_state(True)
+        self.status_label.setText(f"正在执行: {description}...")
+        self.status_label.setStyleSheet("color: #569cd6;")
+        
+        # 显示执行信息
+        self._switch_result_mode(result_type)
+        self._log_message(f"[{self.current_db_type}] {description}")
+        self._log_message(f"操作: {operation_id}")
+        
+        # 创建并启动工作线程
+        self.db_worker = DBOpsWorker(
+            db_profile=self.current_profile,
+            operation=operation_id,
+            sql_text=sql_text,
+            result_type=result_type,
+            timeout=timeout,
+            parent=self
         )
+        
+        self.db_worker.result_signal.connect(
+            lambda status, data_type, content, meta: self._on_query_success(
+                status, data_type, content, meta, description
+            )
+        )
+        self.db_worker.error_signal.connect(self._on_query_error)
+        self.db_worker.finished_signal.connect(lambda: self._set_executing_state(False))
+        
+        self.db_worker.start()
     
     def _on_browse_dmp(self) -> None:
         """浏览 DMP 文件"""
@@ -681,6 +719,111 @@ class DatabaseOpsWidget(QWidget):
         
         self._log_message(info)
     
+    def _switch_result_mode(self, mode: str) -> None:
+        """
+        切换结果显示模式
+        
+        Args:
+            mode: 'text' 或 'table'
+        """
+        if mode == "text":
+            self.result_stack.setCurrentIndex(0)
+            self.result_mode_label.setText("[文本模式]")
+        else:
+            self.result_stack.setCurrentIndex(1)
+            self.result_mode_label.setText("[表格模式]")
+        self.result_mode_label.setVisible(True)
+    
+    def _on_query_success(self, status: str, data_type: str, content, metadata: dict, description: str) -> None:
+        """
+        查询成功回调
+        
+        Args:
+            status: 'success'
+            data_type: 'table' 或 'text'
+            content: 实际数据
+            metadata: 元信息（行数、列数等）
+            description: 操作描述
+        """
+        if data_type == "text":
+            # 文本结果显示
+            self._switch_result_mode("text")
+            self.result_text.append(f"\n{'='*60}")
+            self.result_text.append(f"【{description}】")
+            self.result_text.append(f"{'='*60}\n")
+            self.result_text.append(str(content))
+            self.result_text.append(f"\n{'='*60}")
+            
+            row_count = metadata.get("row_count", 0)
+            elapsed_ms = metadata.get("elapsed_ms", 0)
+            self.result_text.append(f"行数: {row_count} | 耗时: {elapsed_ms}ms")
+            
+        else:  # table
+            # 表格结果显示
+            self._switch_result_mode("table")
+            
+            headers = metadata.get("columns", [])
+            rows = content if isinstance(content, list) else []
+            
+            # 设置表格
+            self.result_table.setColumnCount(len(headers))
+            self.result_table.setRowCount(len(rows))
+            self.result_table.setHorizontalHeaderLabels(headers)
+            
+            # 填充数据
+            for row_idx, row_data in enumerate(rows):
+                for col_idx, cell_value in enumerate(row_data):
+                    item = QTableWidgetItem(str(cell_value))
+                    item.setFlags(item.flags() & ~Qt.ItemIsEditable)
+                    self.result_table.setItem(row_idx, col_idx, item)
+            
+            # 调整列宽
+            self.result_table.resizeColumnsToContents()
+            
+            # 更新标签
+            row_count = metadata.get("row_count", 0)
+            col_count = metadata.get("column_count", 0)
+            elapsed_ms = metadata.get("elapsed_ms", 0)
+            self.result_label.setText(f"{description} - {row_count} 行数据")
+        
+        # 更新状态栏
+        elapsed_ms = metadata.get("elapsed_ms", 0)
+        self.status_label.setText(f"✓ {description} 完成 ({elapsed_ms}ms)")
+        self.status_label.setStyleSheet("color: #4ec9b0;")
+    
+    def _on_query_error(self, error_msg: str, sql_text: str) -> None:
+        """
+        查询错误回调
+        
+        Args:
+            error_msg: 错误信息
+            sql_text: 执行的 SQL
+        """
+        self._switch_result_mode("text")
+        self.result_text.append(f"\n{'='*60}")
+        self.result_text.append("【执行错误】")
+        self.result_text.append(f"{'='*60}\n")
+        self.result_text.append(error_msg)
+        self.result_text.append(f"\n{'='*60}")
+        
+        # 限制 SQL 显示长度
+        sql_display = sql_text[:500] + "..." if len(sql_text) > 500 else sql_text
+        self.result_text.append(f"\nSQL:\n{sql_display}")
+        
+        self.status_label.setText("✗ 执行失败")
+        self.status_label.setStyleSheet("color: #f48771;")
+    
+    def _set_executing_state(self, executing: bool) -> None:
+        """设置执行状态"""
+        # 禁用/启用操作按钮
+        for i in range(self.ops_layout.count()):
+            item = self.ops_layout.itemAt(i)
+            if item and item.widget():
+                item.widget().setEnabled(not executing)
+        
+        self.connect_btn.setEnabled(not executing)
+        self.conn_combo.setEnabled(not executing)
+    
     def _log_message(self, message: str) -> None:
         """添加日志消息"""
         from datetime import datetime
@@ -697,6 +840,8 @@ class DatabaseOpsWidget(QWidget):
         self.result_table.clear()
         self.result_table.setRowCount(0)
         self.result_table.setColumnCount(0)
+        self.result_label.setText("操作结果")
+        self.result_mode_label.setVisible(False)
     
     def _reset_ui(self) -> None:
         """重置 UI"""
@@ -718,6 +863,12 @@ class DatabaseOpsWidget(QWidget):
         self.ops_layout.addWidget(self.ops_hint, 0, 0, 1, 4)
         
         self.pump_group.setVisible(False)
+    
+    def closeEvent(self, event) -> None:
+        """关闭时确保线程停止"""
+        if self.db_worker and self.db_worker.is_running():
+            self.db_worker.stop()
+        event.accept()
 
 
 # 插件入口点
