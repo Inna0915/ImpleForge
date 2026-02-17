@@ -439,7 +439,7 @@ class DatabaseOpsWidget(QWidget):
         self.clear_result_btn.setStyleSheet(op_btn_style)
         
         # 数据泵输入框
-        self.pump_path_input.setStyleSheet("""
+        self.pump_file_input.setStyleSheet("""
             QLineEdit {
                 background-color: #3c3c3c;
                 color: #cccccc;
