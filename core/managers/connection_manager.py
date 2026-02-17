@@ -189,29 +189,30 @@ class ConnectionManager:
         password: str,
         db_type: str = "mysql",
         database: str = "",
-        profile_id: Optional[str] = None
+        profile_id: Optional[str] = None,
+        # Phase 7 新增字段
+        auth_source: str = "",
+        oracle_mode: str = "",
+        oracle_value: str = ""
     ) -> bool:
         """
-        保存连接配置
-        
-        如果 name 已存在则更新，否则创建新配置。
+        保存连接配置 - Phase 7 更新版
         
         Args:
-            name: 配置名称（显示用）
-            host: 数据库主机地址
+            name: 配置名称
+            host: 主机地址
             port: 端口号
             username: 用户名
-            password: 密码（明文存储，生产环境建议加密）
-            db_type: 数据库类型，默认 mysql
-            database: 默认数据库名
-            profile_id: 可选，指定 ID 用于更新现有配置
+            password: 密码
+            db_type: 数据库类型
+            database: 数据库名
+            profile_id: 配置 ID
+            auth_source: MongoDB 认证源
+            oracle_mode: Oracle 连接模式 ('service_name' 或 'sid')
+            oracle_value: Oracle Service Name 或 SID 值
             
         Returns:
             是否保存成功
-            
-        注意:
-            生产环境密码应使用加密存储，例如:
-            - Python keyring 库
             - 系统密钥管理服务 (Windows Credential / macOS Keychain)
             - 或至少使用对称加密 + 环境变量存储密钥
         """
@@ -243,7 +244,11 @@ class ConnectionManager:
             "password": password,  # TODO: 生产环境应加密存储
             "db_type": db_type,
             "database": database,
-            "updated_at": now
+            "updated_at": now,
+            # Phase 7 新增字段
+            "auth_source": auth_source,
+            "oracle_mode": oracle_mode,
+            "oracle_value": oracle_value
         }
         
         if existing_idx is not None:

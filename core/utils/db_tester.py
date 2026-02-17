@@ -1,15 +1,15 @@
 """
-数据库连接测试工具 - 使用 SQLAlchemy 测试数据库连接
+数据库连接测试工具 - Phase 7 更新版
 
 依赖安装:
-    pip install sqlalchemy pymysql
+    pip install sqlalchemy pymysql oracledb pymssql pymongo
 
 支持的数据库:
     - MySQL (mysql+pymysql://)
-    - PostgreSQL (postgresql+psycopg2://) - 需要安装 psycopg2
-    - SQLite (sqlite:///)
-    - SQL Server (mssql+pyodbc://) - 需要安装 pyodbc
-    - Oracle (oracle+cx_oracle://) - 需要安装 cx_oracle
+    - MariaDB (mysql+pymysql://)
+    - SQL Server (mssql+pymssql://)
+    - Oracle (oracle+oracledb://) - 支持 Service Name 和 SID
+    - MongoDB (pymongo)
 """
 
 from typing import Dict, Any, Tuple, Optional
@@ -18,9 +18,12 @@ import traceback
 
 def test_db_connection(profile: Dict[str, Any]) -> Tuple[bool, str]:
     """
-    测试数据库连接
+    测试数据库连接 - Phase 7 更新版
     
-    使用 SQLAlchemy 创建引擎并尝试连接，执行简单查询验证。
+    支持新的配置格式：
+    - Oracle: oracle_mode ('service_name'|'sid'), oracle_value
+    - MongoDB: auth_source
+    - SQL Server: database
     
     Args:
         profile: 连接配置字典，包含:
@@ -28,72 +31,48 @@ def test_db_connection(profile: Dict[str, Any]) -> Tuple[bool, str]:
             - port: 端口号
             - username: 用户名
             - password: 密码
-            - db_type: 数据库类型 (mysql, postgresql, sqlite, mssql, oracle)
-            - database: 数据库名称 (可选)
+            - db_type: 数据库类型 (mysql, mariadb, sqlserver, oracle, mongodb)
+            - database: 数据库名称
+            - auth_source: MongoDB 认证源 (默认 'admin')
+            - oracle_mode: Oracle 连接模式 ('service_name' 或 'sid')
+            - oracle_value: Oracle Service Name 或 SID 值
     
     Returns:
         (success: bool, message: str)
-        - success: True 表示连接成功，False 表示失败
-        - message: 成功时返回 "连接成功"，失败时返回错误信息
-    
-    Example:
-        >>> profile = {
-        ...     "host": "localhost",
-        ...     "port": 3306,
-        ...     "username": "root",
-        ...     "password": "password",
-        ...     "db_type": "mysql",
-        ...     "database": "test"
-        ... }
-        >>> success, msg = test_db_connection(profile)
-        >>> print(success, msg)
-        True 连接成功
-    
-    注意:
-        连接超时设置为 3 秒，防止界面长时间无响应
     """
     try:
-        # 延迟导入，避免模块加载时就要求安装依赖
+        db_type = profile.get("db_type", "").lower()
+        
+        # MongoDB 特殊处理
+        if db_type == "mongodb":
+            return _test_mongodb_connection(profile)
+        
+        # 延迟导入 SQLAlchemy
         from sqlalchemy import create_engine, text
         from sqlalchemy.exc import SQLAlchemyError
         
-        # 提取连接参数
-        host = profile.get("host", "localhost")
-        port = profile.get("port", 3306)
-        username = profile.get("username", "")
-        password = profile.get("password", "")
-        db_type = profile.get("db_type", "mysql").lower()
-        database = profile.get("database", "")
-        
         # 构建连接字符串
-        connection_string = _build_connection_string(
-            db_type, host, port, username, password, database
-        )
+        connection_string = _build_connection_string(profile)
         
         if not connection_string:
             return False, f"不支持的数据库类型: {db_type}"
         
-        # 创建引擎，设置短超时
-        # connect_timeout 防止网络不可达时长时间等待
-        # pool_pre_ping 确保连接有效
+        # 创建引擎
         engine = create_engine(
             connection_string,
-            connect_args={"connect_timeout": 3},
+            connect_args={"connect_timeout": 5},
             pool_pre_ping=True,
             echo=False,
-            # 连接池配置：临时测试不需要连接池
             poolclass=None,
             pool_recycle=3600
         )
         
         # 尝试连接并执行简单查询
         with engine.connect() as connection:
-            # 执行 SELECT 1 测试
             result = connection.execute(text("SELECT 1"))
             row = result.fetchone()
             
             if row and row[0] == 1:
-                # 获取数据库版本信息
                 version_info = _get_db_version(connection, db_type)
                 return True, f"连接成功\n{version_info}"
             else:
@@ -116,66 +95,62 @@ def test_db_connection(profile: Dict[str, Any]) -> Tuple[bool, str]:
         return False, f"连接异常: {str(e)}"
 
 
-def _build_connection_string(
-    db_type: str,
-    host: str,
-    port: int,
-    username: str,
-    password: str,
-    database: str
-) -> Optional[str]:
+def _build_connection_string(profile: Dict[str, Any]) -> Optional[str]:
     """
-    构建 SQLAlchemy 连接字符串
+    构建连接字符串 - Phase 7 更新版
+    
+    支持新的配置格式：
+    - Oracle: oracle_mode, oracle_value
+    - MongoDB: auth_source
     
     Args:
-        db_type: 数据库类型
-        host: 主机地址
-        port: 端口号
-        username: 用户名
-        password: 密码
-        database: 数据库名
+        profile: 完整配置字典
         
     Returns:
-        SQLAlchemy 连接字符串，不支持的数据库返回 None
+        连接字符串，不支持返回 None
     """
-    # URL 编码特殊字符
     from urllib.parse import quote_plus
+    
+    db_type = profile.get("db_type", "").lower()
+    host = profile.get("host", "localhost")
+    port = profile.get("port", 3306)
+    username = profile.get("username", "")
+    password = profile.get("password", "")
+    database = profile.get("database", "")
     
     safe_username = quote_plus(username) if username else ""
     safe_password = quote_plus(password) if password else ""
     
-    if db_type == "mysql":
-        # mysql+pymysql://username:password@host:port/database
+    if db_type in ["mysql", "mariadb"]:
+        # mysql+pymysql://user:pass@host:port/database
         if database:
             return f"mysql+pymysql://{safe_username}:{safe_password}@{host}:{port}/{database}"
         else:
             return f"mysql+pymysql://{safe_username}:{safe_password}@{host}:{port}"
     
-    elif db_type == "postgresql":
-        # postgresql+psycopg2://username:password@host:port/database
+    elif db_type == "sqlserver":
+        # mssql+pymssql://user:pass@host:port/dbname
+        driver = "mssql+pymssql"
         if database:
-            return f"postgresql+psycopg2://{safe_username}:{safe_password}@{host}:{port}/{database}"
+            return f"{driver}://{safe_username}:{safe_password}@{host}:{port}/{database}"
         else:
-            return f"postgresql+psycopg2://{safe_username}:{safe_password}@{host}:{port}"
-    
-    elif db_type == "sqlite":
-        # sqlite:///path/to/database.db 或 sqlite:///:memory:
-        if database:
-            return f"sqlite:///{database}"
-        else:
-            return "sqlite:///:memory:"
-    
-    elif db_type == "mssql":
-        # mssql+pyodbc://username:password@dsnname
-        # 简化版，实际使用可能需要 ODBC 驱动配置
-        if database:
-            return f"mssql+pyodbc://{safe_username}:{safe_password}@{host}:{port}/{database}?driver=ODBC+Driver+17+for+SQL+Server"
-        else:
-            return f"mssql+pyodbc://{safe_username}:{safe_password}@{host}:{port}?driver=ODBC+Driver+17+for+SQL+Server"
+            return f"{driver}://{safe_username}:{safe_password}@{host}:{port}"
     
     elif db_type == "oracle":
-        # oracle+cx_oracle://username:password@host:port/?service_name=service
-        return f"oracle+cx_oracle://{safe_username}:{safe_password}@{host}:{port}/?service_name={database or 'ORCL'}"
+        # oracle+oracledb://user:pass@host:port/?service_name=xxx 或 ?sid=xxx
+        oracle_mode = profile.get("oracle_mode", "service_name")
+        oracle_value = profile.get("oracle_value", database or "ORCL")
+        
+        if oracle_mode == "sid":
+            # SID 模式
+            return f"oracle+oracledb://{safe_username}:{safe_password}@{host}:{port}/?sid={oracle_value}"
+        else:
+            # Service Name 模式（默认）
+            return f"oracle+oracledb://{safe_username}:{safe_password}@{host}:{port}/?service_name={oracle_value}"
+    
+    elif db_type == "mongodb":
+        # MongoDB 不使用 SQLAlchemy，返回特殊标记
+        return "mongodb"
     
     else:
         return None
@@ -195,30 +170,20 @@ def _get_db_version(connection, db_type: str) -> str:
     from sqlalchemy import text
     
     try:
-        if db_type == "mysql":
+        if db_type in ["mysql", "mariadb"]:
             result = connection.execute(text("SELECT VERSION()"))
             version = result.fetchone()[0]
-            return f"MySQL 版本: {version}"
+            return f"MySQL/MariaDB 版本: {version}"
         
-        elif db_type == "postgresql":
-            result = connection.execute(text("SELECT version()"))
-            version = result.fetchone()[0]
-            return f"PostgreSQL: {version.split()[0]}"
-        
-        elif db_type == "sqlite":
-            result = connection.execute(text("SELECT sqlite_version()"))
-            version = result.fetchone()[0]
-            return f"SQLite 版本: {version}"
-        
-        elif db_type == "mssql":
+        elif db_type == "sqlserver":
             result = connection.execute(text("SELECT @@VERSION"))
             version = result.fetchone()[0]
             return f"SQL Server: {version[:50]}..."
         
         elif db_type == "oracle":
-            result = connection.execute(text("SELECT * FROM v$version"))
+            result = connection.execute(text("SELECT banner FROM v$version WHERE ROWNUM = 1"))
             version = result.fetchone()[0]
-            return f"Oracle: {version}"
+            return f"Oracle: {version[:50]}..."
         
         else:
             return "数据库版本: 未知"
@@ -284,12 +249,55 @@ def _get_required_driver(db_type: str) -> str:
     """
     drivers = {
         "mysql": "pymysql",
-        "postgresql": "psycopg2-binary",
-        "sqlite": "",  # SQLite 内置支持
-        "mssql": "pyodbc",
-        "oracle": "cx_oracle"
+        "mariadb": "pymysql",
+        "sqlserver": "pymssql",
+        "oracle": "oracledb",
+        "mongodb": "pymongo"
     }
     return drivers.get(db_type, f"{db_type} 驱动")
+
+
+def _test_mongodb_connection(profile: Dict[str, Any]) -> Tuple[bool, str]:
+    """
+    测试 MongoDB 连接
+    
+    Args:
+        profile: 配置字典
+        
+    Returns:
+        (success, message)
+    """
+    try:
+        from pymongo import MongoClient
+        from pymongo.errors import PyMongoError
+        
+        host = profile.get("host", "localhost")
+        port = profile.get("port", 27017)
+        username = profile.get("username", "")
+        password = profile.get("password", "")
+        auth_source = profile.get("auth_source", "admin")
+        
+        # 构建连接字符串
+        if username and password:
+            uri = f"mongodb://{username}:{password}@{host}:{port}/?authSource={auth_source}"
+        else:
+            uri = f"mongodb://{host}:{port}"
+        
+        # 连接并测试
+        client = MongoClient(uri, serverSelectionTimeoutMS=5000)
+        
+        # 执行服务器信息查询
+        info = client.server_info()
+        version = info.get("version", "unknown")
+        
+        client.close()
+        
+        return True, f"连接成功\nMongoDB 版本: {version}"
+        
+    except PyMongoError as e:
+        return False, f"MongoDB 连接失败: {str(e)}"
+    except ImportError:
+        return False, "缺少 pymongo 库，请执行: pip install pymongo"
 
 
 # 用于异步执行的 Worker 类

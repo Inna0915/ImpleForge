@@ -173,15 +173,13 @@
           "name": "数据库连接配置",
           "type": "plugin",
           "action": {
-            "module_path": "demo_wizard.wizard",
-            "class_name": "DatabaseWizard",
+            "module_path": "db_conn.wizard",
+            "class_name": "ConnectionWizard",
             "params": {
-              "title": "数据库连接配置向导",
-              "default_host": "localhost",
-              "default_port": 3306
+              "title": "数据库连接配置"
             }
           },
-          "description": "配置数据库连接参数"
+          "description": "Navicat 风格数据库连接配置"
         },
         {
           "id": "db_ops_dashboard",
