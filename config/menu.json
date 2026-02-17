@@ -1,0 +1,162 @@
+{
+  "menu": [
+    {
+      "id": "network",
+      "name": "网络工具",
+      "icon": "🌐",
+      "children": [
+        {
+          "id": "network_diagnose",
+          "name": "网络诊断",
+          "type": "script",
+          "action": {
+            "cmd": "ipconfig /all"
+          },
+          "description": "显示网络配置信息"
+        },
+        {
+          "id": "ping_test",
+          "name": "Ping 测试",
+          "type": "script",
+          "action": {
+            "cmd": "ping 8.8.8.8 -t"
+          },
+          "description": "测试网络连通性"
+        },
+        {
+          "id": "port_scan",
+          "name": "端口扫描",
+          "type": "plugin",
+          "action": {
+            "plugin_id": "port_scanner",
+            "params": {
+              "timeout": 1000
+            }
+          },
+          "description": "扫描开放端口"
+        }
+      ]
+    },
+    {
+      "id": "system",
+      "name": "系统工具",
+      "icon": "⚙️",
+      "children": [
+        {
+          "id": "system_info",
+          "name": "系统信息",
+          "type": "script",
+          "action": {
+            "cmd": "systeminfo"
+          },
+          "description": "显示详细系统信息"
+        },
+        {
+          "id": "service_manager",
+          "name": "服务管理",
+          "type": "plugin",
+          "action": {
+            "plugin_id": "service_mgr",
+            "params": {}
+          },
+          "description": "管理系统服务"
+        },
+        {
+          "id": "process_manager",
+          "name": "进程管理",
+          "type": "plugin",
+          "action": {
+            "plugin_id": "process_mgr",
+            "params": {
+              "refresh_interval": 2000
+            }
+          },
+          "description": "查看和管理进程"
+        }
+      ]
+    },
+    {
+      "id": "disk",
+      "name": "磁盘工具",
+      "icon": "💾",
+      "children": [
+        {
+          "id": "disk_usage",
+          "name": "磁盘使用",
+          "type": "script",
+          "action": {
+            "cmd": "wmic logicaldisk get size,freespace,caption"
+          },
+          "description": "显示磁盘使用情况"
+        },
+        {
+          "id": "disk_cleanup",
+          "name": "磁盘清理",
+          "type": "plugin",
+          "action": {
+            "plugin_id": "disk_cleaner",
+            "params": {
+              "clean_temp": true,
+              "clean_recycle": false
+            }
+          },
+          "description": "清理磁盘垃圾文件"
+        }
+      ]
+    },
+    {
+      "id": "security",
+      "name": "安全工具",
+      "icon": "🔒",
+      "children": [
+        {
+          "id": "firewall_status",
+          "name": "防火墙状态",
+          "type": "script",
+          "action": {
+            "cmd": "netsh advfirewall show allprofiles"
+          },
+          "description": "查看防火墙配置"
+        },
+        {
+          "id": "audit_policy",
+          "name": "审计策略",
+          "type": "script",
+          "action": {
+            "cmd": "auditpol /get /category:*"
+          },
+          "description": "查看安全审计策略"
+        }
+      ]
+    },
+    {
+      "id": "deployment",
+      "name": "部署工具",
+      "icon": "🚀",
+      "children": [
+        {
+          "id": "software_install",
+          "name": "软件安装",
+          "type": "plugin",
+          "action": {
+            "plugin_id": "pkg_installer",
+            "params": {
+              "silent": true
+            }
+          },
+          "description": "批量安装软件"
+        },
+        {
+          "id": "env_config",
+          "name": "环境配置",
+          "type": "plugin",
+          "action": {
+            "plugin_id": "env_configurator",
+            "params": {}
+          },
+          "description": "配置系统环境变量"
+        }
+      ]
+    }
+  ]
+}
