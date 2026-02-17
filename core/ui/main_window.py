@@ -27,6 +27,7 @@ from PySide6.QtCore import Qt, QSize
 from PySide6.QtGui import QFont
 
 from ..utils.config_loader import ConfigLoader
+from .console_widget import ConsoleWidget
 
 
 class MainWindow(QMainWindow):
@@ -58,6 +59,10 @@ class MainWindow(QMainWindow):
         # 存储菜单项数据，用于点击时检索
         # key: item_id, value: 完整的菜单项数据字典
         self._menu_data_map: Dict[str, Dict[str, Any]] = {}
+        
+        # 页面缓存，避免重复创建
+        # key: menu_item_id, value: QWidget
+        self._page_cache: Dict[str, QWidget] = {}
         
         # 初始化 UI
         self._setup_ui()
@@ -284,23 +289,44 @@ class MainWindow(QMainWindow):
             print(f"[Warning] 未找到节点数据: {item.text(0)}")
 
     def _handle_script_selection(self, item_data: Dict[str, Any]) -> None:
-        """处理脚本类型节点选择"""
-        action = item_data.get("action", {})
-        cmd = action.get("cmd", "")
+        """
+        处理脚本类型节点选择 - 加载 ConsoleWidget 执行界面
         
-        # 切换到详情页面并显示信息
-        page = self._create_detail_page(item_data)
-        self.stacked_widget.addWidget(page)
-        self.stacked_widget.setCurrentWidget(page)
+        Args:
+            item_data: 菜单项数据，包含 cmd 或 script_path
+        """
+        item_id = item_data.get("id", "")
+        
+        # 检查缓存
+        if item_id in self._page_cache:
+            self.stacked_widget.setCurrentWidget(self._page_cache[item_id])
+            return
+        
+        # 创建新的控制台界面
+        console_widget = ConsoleWidget(item_data, parent=self)
+        
+        # 添加到堆叠部件和缓存
+        self.stacked_widget.addWidget(console_widget)
+        self._page_cache[item_id] = console_widget
+        self.stacked_widget.setCurrentWidget(console_widget)
 
     def _handle_plugin_selection(self, item_data: Dict[str, Any]) -> None:
-        """处理插件类型节点选择"""
-        action = item_data.get("action", {})
-        plugin_id = action.get("plugin_id", "")
+        """
+        处理插件类型节点选择
         
-        # 切换到详情页面并显示信息
-        page = self._create_detail_page(item_data)
+        Phase 2: 暂显示为开发中，Phase 3 将集成实际插件
+        """
+        item_id = item_data.get("id", "")
+        
+        # 检查缓存
+        if item_id in self._page_cache:
+            self.stacked_widget.setCurrentWidget(self._page_cache[item_id])
+            return
+        
+        # 创建插件开发中提示页面
+        page = self._create_plugin_placeholder_page(item_data)
         self.stacked_widget.addWidget(page)
+        self._page_cache[item_id] = page
         self.stacked_widget.setCurrentWidget(page)
 
     def _create_detail_page(self, item_data: Dict[str, Any]) -> QWidget:
@@ -375,3 +401,65 @@ class MainWindow(QMainWindow):
         </pre>
         """
         return html
+
+    def _create_plugin_placeholder_page(self, item_data: Dict[str, Any]) -> QWidget:
+        """
+        创建插件占位页面（插件开发中提示）
+        
+        Args:
+            item_data: 菜单项数据
+            
+        Returns:
+            占位页面部件
+        """
+        page = QWidget()
+        layout = QVBoxLayout(page)
+        layout.setContentsMargins(30, 30, 30, 30)
+        
+        # 标题
+        name = item_data.get("name", "未命名")
+        
+        title = QLabel(f"🔌 {name}")
+        title_font = QFont()
+        title_font.setPointSize(18)
+        title_font.setBold(True)
+        title.setFont(title_font)
+        layout.addWidget(title)
+        
+        # 类型标签
+        type_label = QLabel("类型: PLUGIN")
+        type_label.setStyleSheet("color: #969696; margin-top: 5px;")
+        layout.addWidget(type_label)
+        
+        # 分隔线
+        line = QFrame()
+        line.setFrameShape(QFrame.HLine)
+        line.setStyleSheet("background-color: #333333; max-height: 1px; margin: 20px 0;")
+        layout.addWidget(line)
+        
+        # 开发中提示
+        placeholder = QLabel("🚧 插件功能开发中 (Phase 3)\n\n该功能将在后续版本提供")
+        placeholder.setAlignment(Qt.AlignCenter)
+        placeholder.setStyleSheet("""
+            color: #dcdcaa; 
+            padding: 40px;
+            font-size: 14px;
+        """)
+        layout.addWidget(placeholder)
+        
+        # 显示配置信息
+        info_text = QTextEdit()
+        info_text.setReadOnly(True)
+        info_text.setHtml(self._format_item_info(item_data))
+        info_text.setStyleSheet("""
+            QTextEdit {
+                border: 1px solid #333333;
+                background-color: #252526;
+                padding: 15px;
+                font-family: 'Consolas', 'Monaco', monospace;
+            }
+        """)
+        layout.addWidget(info_text)
+        
+        layout.addStretch()
+        return page

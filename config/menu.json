@@ -19,9 +19,9 @@
           "name": "Ping 测试",
           "type": "script",
           "action": {
-            "cmd": "ping 8.8.8.8 -t"
+            "cmd": "ping 8.8.8.8 -n 4"
           },
-          "description": "测试网络连通性"
+          "description": "测试网络连通性 (发送4个数据包)"
         },
         {
           "id": "port_scan",
