@@ -58,6 +58,7 @@ from core.strategies.db_ops import (
 )
 from core.strategies.sql_registry import SQLRegistry
 from core.workers.db_ops_worker import DBOpsWorker
+from core.workers.datapump_worker import DataPumpWorker
 
 
 class DatabaseOpsWidget(QWidget):
@@ -89,6 +90,7 @@ class DatabaseOpsWidget(QWidget):
         
         # 工作线程
         self.db_worker: DBOpsWorker = None
+        self.datapump_worker: DataPumpWorker = None
         
         self._setup_ui()
         self._apply_styles()
@@ -192,23 +194,49 @@ class DatabaseOpsWidget(QWidget):
         self.pump_group.setVisible(False)
         
         pump_layout = QVBoxLayout(self.pump_group)
-        pump_layout.setSpacing(10)
+        pump_layout.setSpacing(12)
         pump_layout.setContentsMargins(15, 20, 15, 15)
         
-        # 路径选择
+        # 说明标签
+        pump_hint = QLabel("⚠️ 数据泵在服务器端执行，文件保存在服务器指定目录中")
+        pump_hint.setStyleSheet("color: #dcdcaa; font-size: 11px;")
+        pump_layout.addWidget(pump_hint)
+        
+        # Directory 名称（服务器端目录对象）
+        dir_layout = QHBoxLayout()
+        dir_label = QLabel("Directory 名称:")
+        dir_label.setStyleSheet("color: #969696;")
+        dir_label.setFixedWidth(100)
+        dir_layout.addWidget(dir_label)
+        
+        self.pump_dir_input = QLineEdit("DATA_PUMP_DIR")
+        self.pump_dir_input.setToolTip("Oracle 服务器端目录对象名称，默认 DATA_PUMP_DIR")
+        dir_layout.addWidget(self.pump_dir_input)
+        
+        dir_info_btn = QPushButton("?")
+        dir_info_btn.setFixedSize(28, 28)
+        dir_info_btn.setToolTip("需要在服务器上预先创建目录对象:\nCREATE DIRECTORY DATA_PUMP_DIR AS '/path/to/dir';")
+        dir_layout.addWidget(dir_info_btn)
+        
+        pump_layout.addLayout(dir_layout)
+        
+        # DMP 文件名（仅文件名，不含路径）
         path_layout = QHBoxLayout()
-        path_label = QLabel("DMP 文件路径:")
+        path_label = QLabel("DMP 文件名:")
         path_label.setStyleSheet("color: #969696;")
+        path_label.setFixedWidth(100)
         path_layout.addWidget(path_label)
         
-        self.pump_path_input = QLineEdit()
-        self.pump_path_input.setPlaceholderText("选择 .dmp 文件路径...")
-        path_layout.addWidget(self.pump_path_input)
+        self.pump_file_input = QLineEdit()
+        self.pump_file_input.setPlaceholderText("export.dmp (仅文件名，不含路径)")
+        path_layout.addWidget(self.pump_file_input)
         
-        self.browse_btn = QPushButton("浏览...")
-        self.browse_btn.setFixedWidth(80)
-        self.browse_btn.clicked.connect(self._on_browse_dmp)
-        path_layout.addWidget(self.browse_btn)
+        # 添加获取文件名按钮
+        self.get_filename_btn = QPushButton("📁")
+        self.get_filename_btn.setFixedSize(32, 32)
+        self.get_filename_btn.setToolTip("从本地选择参考文件名（仅提取文件名）")
+        self.get_filename_btn.clicked.connect(self._on_select_dmp_filename)
+        path_layout.addWidget(self.get_filename_btn)
         
         pump_layout.addLayout(path_layout)
         
@@ -216,15 +244,35 @@ class DatabaseOpsWidget(QWidget):
         pump_btn_layout = QHBoxLayout()
         
         self.expdp_btn = QPushButton("📤 Expdp 导出")
-        self.expdp_btn.setFixedHeight(36)
-        self.expdp_btn.setToolTip("执行 Oracle 数据泵导出")
-        self.expdp_btn.clicked.connect(lambda: self._on_pump_operation("expdp"))
+        self.expdp_btn.setFixedHeight(38)
+        self.expdp_btn.setToolTip("执行 Oracle 数据泵导出 (expdp)")
+        self.expdp_btn.clicked.connect(self._on_expdp_click)
         pump_btn_layout.addWidget(self.expdp_btn)
         
         self.impdp_btn = QPushButton("📥 Impdp 导入")
-        self.impdp_btn.setFixedHeight(36)
-        self.impdp_btn.setToolTip("执行 Oracle 数据泵导入")
-        self.impdp_btn.clicked.connect(lambda: self._on_pump_operation("impdp"))
+        self.impdp_btn.setFixedHeight(38)
+        self.impdp_btn.setToolTip("执行 Oracle 数据泵导入 (impdp)⚠️ 将覆盖现有数据")
+        self.impdp_btn.setStyleSheet("""
+            QPushButton {
+                background-color: #c75450;
+                color: #ffffff;
+                border: none;
+                border-radius: 4px;
+                padding: 0 20px;
+                font-size: 13px;
+            }
+            QPushButton:hover {
+                background-color: #d96864;
+            }
+            QPushButton:pressed {
+                background-color: #a0403d;
+            }
+            QPushButton:disabled {
+                background-color: #3c3c3c;
+                color: #6e6e6e;
+            }
+        """)
+        self.impdp_btn.clicked.connect(self._on_impdp_click)
         pump_btn_layout.addWidget(self.impdp_btn)
         
         pump_btn_layout.addStretch()
@@ -656,45 +704,156 @@ class DatabaseOpsWidget(QWidget):
         
         self.db_worker.start()
     
-    def _on_browse_dmp(self) -> None:
-        """浏览 DMP 文件"""
+    def _on_select_dmp_filename(self) -> None:
+        """选择 DMP 文件名（仅从本地路径提取文件名作为参考）"""
         file_path, _ = QFileDialog.getSaveFileName(
             self,
-            "选择 DMP 文件",
+            "选择 DMP 文件名参考",
             "",
             "Oracle Dump Files (*.dmp);;All Files (*)",
             options=QFileDialog.DontConfirmOverwrite
         )
         
         if file_path:
-            self.pump_path_input.setText(file_path)
+            # 仅提取文件名，不包含路径
+            filename = Path(file_path).name
+            # 确保扩展名为 .dmp
+            if not filename.lower().endswith('.dmp'):
+                filename += '.dmp'
+            self.pump_file_input.setText(filename)
     
-    def _on_pump_operation(self, operation: str) -> None:
-        """数据泵操作"""
-        dmp_path = self.pump_path_input.text().strip()
+    def _on_expdp_click(self) -> None:
+        """Expdp 导出按钮点击"""
+        self._execute_datapump("expdp", confirm=False)
+    
+    def _on_impdp_click(self) -> None:
+        """Impdp 导入按钮点击"""
+        # 二次确认
+        reply = QMessageBox.warning(
+            self,
+            "⚠️ 危险操作确认",
+            "导入操作 (Impdp) 可能会:\n"
+            "- 覆盖现有表数据\n"
+            "- 删除已有对象并重建\n"
+            "- 导入大量数据导致性能下降\n\n"
+            "建议在非业务高峰期执行，并确保已有备份。\n\n"
+            "确定要继续吗？",
+            QMessageBox.Yes | QMessageBox.No,
+            QMessageBox.No
+        )
         
-        if not dmp_path:
-            QMessageBox.warning(self, "路径为空", "请选择 DMP 文件路径")
-            return
+        if reply == QMessageBox.Yes:
+            self._execute_datapump("impdp", confirm=True)
+    
+    def _execute_datapump(self, operation: str, confirm: bool = False) -> None:
+        """
+        执行数据泵操作
         
+        Args:
+            operation: 'expdp' 或 'impdp'
+            confirm: 是否需要确认（已在外层处理）
+        """
+        # 检查连接
         if not self.current_profile or self.current_db_type != "oracle":
             QMessageBox.warning(self, "不支持", "数据泵仅支持 Oracle 数据库")
             return
         
-        self._log_message(f"执行数据泵操作: {operation}")
-        self._log_message(f"DMP 路径: {dmp_path}")
-        self._log_message(f"目标数据库: {self.current_profile.get('name', '')}")
+        # 获取参数
+        directory = self.pump_dir_input.text().strip()
+        filename = self.pump_file_input.text().strip()
         
-        op_name = "导出 (Expdp)" if operation == "expdp" else "导入 (Impdp)"
+        if not directory:
+            QMessageBox.warning(self, "参数错误", "请输入 Directory 名称")
+            return
         
-        QMessageBox.information(
-            self,
-            f"Oracle 数据泵 - {op_name}",
-            f"操作: {op_name}\n"
-            f"DMP 文件: {dmp_path}\n"
-            f"目标数据库: {self.current_profile.get('name', '')}\n\n"
-            f"（具体数据泵执行逻辑将在后续 Phase 实现）"
+        if not filename:
+            QMessageBox.warning(self, "参数错误", "请输入 DMP 文件名")
+            return
+        
+        # 检查 Oracle 客户端环境
+        available, msg = DataPumpWorker.check_oracle_client()
+        if not available:
+            QMessageBox.critical(
+                self,
+                "环境检查失败",
+                f"{msg}\n\n"
+                f"请确保已安装 Oracle Instant Client 或完整客户端，\n"
+                f"并将 bin 目录添加到系统 PATH 环境变量。"
+            )
+            return
+        
+        # 停止之前的任务
+        if self.datapump_worker and self.datapump_worker.is_running():
+            self.datapump_worker.stop()
+        
+        # 切换到文本模式显示日志
+        self._switch_result_mode("text")
+        self._log_message(f"\n{'='*60}")
+        self._log_message(f"【Oracle 数据泵 {operation.upper()}】")
+        self._log_message(f"{'='*60}")
+        
+        # 构建数据库配置
+        db_config = {
+            "username": self.current_profile.get("username", ""),
+            "password": self.current_profile.get("password", ""),
+            "host": self.current_profile.get("host", ""),
+            "port": self.current_profile.get("port", 1521),
+            "service_name": self.current_profile.get("database", "ORCL"),
+        }
+        
+        # 禁用按钮
+        self._set_datapump_executing_state(True)
+        self.status_label.setText(f"正在执行 {operation.upper()}...")
+        self.status_label.setStyleSheet("color: #569cd6;")
+        
+        # 创建并启动工作线程
+        self.datapump_worker = DataPumpWorker(
+            db_config=db_config,
+            operation=operation,
+            dmp_filename=filename,
+            directory_name=directory,
+            parent=self
         )
+        
+        self.datapump_worker.output_signal.connect(self._on_datapump_output)
+        self.datapump_worker.error_signal.connect(self._on_datapump_error)
+        self.datapump_worker.finished_signal.connect(
+            lambda exit_code, success: self._on_datapump_finished(exit_code, success, operation)
+        )
+        
+        self.datapump_worker.start()
+    
+    def _on_datapump_output(self, line: str) -> None:
+        """数据泵实时输出"""
+        self.result_text.append(line)
+        # 滚动到底部
+        scrollbar = self.result_text.verticalScrollBar()
+        scrollbar.setValue(scrollbar.maximum())
+    
+    def _on_datapump_error(self, error_msg: str) -> None:
+        """数据泵错误"""
+        self.result_text.append(f"\n[错误] {error_msg}")
+        self.status_label.setText("✗ 数据泵执行失败")
+        self.status_label.setStyleSheet("color: #f48771;")
+    
+    def _on_datapump_finished(self, exit_code: int, success: bool, operation: str) -> None:
+        """数据泵执行完成"""
+        self._set_datapump_executing_state(False)
+        
+        if success:
+            self.status_label.setText(f"✓ {operation.upper()} 完成")
+            self.status_label.setStyleSheet("color: #4ec9b0;")
+        else:
+            self.status_label.setText(f"✗ {operation.upper()} 失败 (码: {exit_code})")
+            self.status_label.setStyleSheet("color: #f48771;")
+    
+    def _set_datapump_executing_state(self, executing: bool) -> None:
+        """设置数据泵执行状态"""
+        self.expdp_btn.setEnabled(not executing)
+        self.impdp_btn.setEnabled(not executing)
+        self.pump_dir_input.setEnabled(not executing)
+        self.pump_file_input.setEnabled(not executing)
+        self.get_filename_btn.setEnabled(not executing)
     
     def _show_connection_info(self, profile: dict) -> None:
         """显示连接信息"""
@@ -868,6 +1027,8 @@ class DatabaseOpsWidget(QWidget):
         """关闭时确保线程停止"""
         if self.db_worker and self.db_worker.is_running():
             self.db_worker.stop()
+        if self.datapump_worker and self.datapump_worker.is_running():
+            self.datapump_worker.stop()
         event.accept()
 
 
