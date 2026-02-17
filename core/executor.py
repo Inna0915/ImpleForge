@@ -10,6 +10,36 @@ from typing import Optional
 from PySide6.QtCore import QThread, Signal
 
 
+def smart_decode(data: bytes) -> str:
+    """
+    智能解码函数 - 自动检测并解码字节数据
+    
+    解码策略:
+    1. 优先尝试 UTF-8 解码（现代应用、Python 脚本等常用）
+    2. UTF-8 失败则回退到 GBK（Windows CMD 默认编码）
+    3. 使用 errors='replace' 确保不会因乱码而崩溃
+    
+    Args:
+        data: 需要解码的字节数据
+        
+    Returns:
+        解码后的字符串
+    """
+    # 首先尝试 UTF-8 解码
+    try:
+        return data.decode('utf-8', errors='strict')
+    except UnicodeDecodeError:
+        # UTF-8 解码失败，回退到 GBK
+        pass
+    
+    # 回退到 GBK（Windows 命令行默认编码）
+    try:
+        return data.decode('gbk', errors='strict')
+    except UnicodeDecodeError:
+        # 如果 GBK 也失败，使用 GBK + replace 模式确保不崩溃
+        return data.decode('gbk', errors='replace')
+
+
 class CommandWorker(QThread):
     """
     命令执行工作线程
@@ -82,12 +112,8 @@ class CommandWorker(QThread):
                 # 逐行读取，避免阻塞
                 line = self._process.stdout.readline()
                 if line:
-                    # Windows CMD 默认使用 GBK 编码
-                    # 使用 errors='replace' 避免解码失败导致程序崩溃
-                    try:
-                        decoded_line = line.decode('gbk', errors='replace')
-                    except UnicodeDecodeError:
-                        decoded_line = line.decode('utf-8', errors='replace')
+                    # 使用智能解码，优先 UTF-8，失败则回退 GBK
+                    decoded_line = smart_decode(line)
                     
                     # 去掉行尾换行符，QTextEdit.append 会自动添加
                     decoded_line = decoded_line.rstrip('\r\n')
@@ -101,10 +127,7 @@ class CommandWorker(QThread):
             # 读取剩余输出
             remaining = self._process.stdout.read()
             if remaining:
-                try:
-                    decoded = remaining.decode('gbk', errors='replace')
-                except UnicodeDecodeError:
-                    decoded = remaining.decode('utf-8', errors='replace')
+                decoded = smart_decode(remaining)
                 
                 for line in decoded.strip().split('\n'):
                     if line.strip():
