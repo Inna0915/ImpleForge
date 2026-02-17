@@ -433,7 +433,7 @@ class DatabaseOpsWidget(QWidget):
                 border-color: #007acc;
             }
         """
-        self.browse_btn.setStyleSheet(op_btn_style)
+        self.get_filename_btn.setStyleSheet(op_btn_style)
         self.expdp_btn.setStyleSheet(op_btn_style)
         self.impdp_btn.setStyleSheet(op_btn_style)
         self.clear_result_btn.setStyleSheet(op_btn_style)
