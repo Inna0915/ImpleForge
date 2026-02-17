@@ -181,7 +181,20 @@
               "default_port": 3306
             }
           },
-          "description": "配置数据库连接参数（示例插件）"
+          "description": "配置数据库连接参数"
+        },
+        {
+          "id": "sql_console",
+          "name": "SQL 控制台",
+          "type": "plugin",
+          "action": {
+            "module_path": "sql_console.console",
+            "class_name": "SQLConsoleWidget",
+            "params": {
+              "title": "SQL 执行控制台"
+            }
+          },
+          "description": "执行 SQL 查询并查看结果"
         }
       ]
     }
