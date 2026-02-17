@@ -139,9 +139,11 @@
           "name": "软件安装",
           "type": "plugin",
           "action": {
-            "plugin_id": "pkg_installer",
+            "module_path": "demo_wizard.wizard",
+            "class_name": "DatabaseWizard",
             "params": {
-              "silent": true
+              "title": "软件安装向导",
+              "default_host": "software-repo.company.com"
             }
           },
           "description": "批量安装软件"
@@ -151,10 +153,35 @@
           "name": "环境配置",
           "type": "plugin",
           "action": {
-            "plugin_id": "env_configurator",
-            "params": {}
+            "module_path": "demo_wizard.wizard",
+            "class_name": "DatabaseWizard",
+            "params": {
+              "title": "环境变量配置"
+            }
           },
           "description": "配置系统环境变量"
+        }
+      ]
+    },
+    {
+      "id": "database",
+      "name": "数据库工具",
+      "icon": "🗄️",
+      "children": [
+        {
+          "id": "db_connection_wizard",
+          "name": "数据库连接配置",
+          "type": "plugin",
+          "action": {
+            "module_path": "demo_wizard.wizard",
+            "class_name": "DatabaseWizard",
+            "params": {
+              "title": "数据库连接配置向导",
+              "default_host": "localhost",
+              "default_port": 3306
+            }
+          },
+          "description": "配置数据库连接参数（示例插件）"
         }
       ]
     }

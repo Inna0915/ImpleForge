@@ -27,6 +27,7 @@ from PySide6.QtCore import Qt, QSize
 from PySide6.QtGui import QFont
 
 from ..utils.config_loader import ConfigLoader
+from ..plugin_loader import load_plugin
 from .console_widget import ConsoleWidget
 
 
@@ -312,9 +313,12 @@ class MainWindow(QMainWindow):
 
     def _handle_plugin_selection(self, item_data: Dict[str, Any]) -> None:
         """
-        处理插件类型节点选择
+        处理插件类型节点选择 - 动态加载插件
         
-        Phase 2: 暂显示为开发中，Phase 3 将集成实际插件
+        Phase 3: 支持通过 JSON 配置动态加载自定义 QWidget 插件
+        
+        Args:
+            item_data: 菜单项数据，包含 module_path, class_name, plugin_params
         """
         item_id = item_data.get("id", "")
         
@@ -323,11 +327,46 @@ class MainWindow(QMainWindow):
             self.stacked_widget.setCurrentWidget(self._page_cache[item_id])
             return
         
-        # 创建插件开发中提示页面
-        page = self._create_plugin_placeholder_page(item_data)
-        self.stacked_widget.addWidget(page)
-        self._page_cache[item_id] = page
-        self.stacked_widget.setCurrentWidget(page)
+        action = item_data.get("action", {})
+        
+        # 获取插件配置
+        module_path = action.get("module_path", "")
+        class_name = action.get("class_name", "")
+        plugin_params = action.get("params", {})
+        
+        if not module_path or not class_name:
+            # 配置不完整，显示占位页面
+            page = self._create_plugin_placeholder_page(item_data)
+            self.stacked_widget.addWidget(page)
+            self._page_cache[item_id] = page
+            self.stacked_widget.setCurrentWidget(page)
+            return
+        
+        # 动态加载插件
+        try:
+            print(f"[Info] 正在加载插件: {module_path}.{class_name}")
+            
+            plugin_widget = load_plugin(
+                module_path=module_path,
+                class_name=class_name,
+                plugin_params=plugin_params,
+                parent=self
+            )
+            
+            # 添加到堆叠部件和缓存
+            self.stacked_widget.addWidget(plugin_widget)
+            self._page_cache[item_id] = plugin_widget
+            self.stacked_widget.setCurrentWidget(plugin_widget)
+            
+            print(f"[Info] 插件加载成功: {item_data.get('name', '未命名')}")
+            
+        except Exception as e:
+            print(f"[Error] 插件加载失败: {e}")
+            # 显示错误页面
+            error_page = self._create_plugin_error_page(item_data, str(e))
+            self.stacked_widget.addWidget(error_page)
+            self._page_cache[item_id] = error_page
+            self.stacked_widget.setCurrentWidget(error_page)
 
     def _create_detail_page(self, item_data: Dict[str, Any]) -> QWidget:
         """
@@ -401,6 +440,82 @@ class MainWindow(QMainWindow):
         </pre>
         """
         return html
+
+    def _create_plugin_error_page(self, item_data: Dict[str, Any], error_msg: str) -> QWidget:
+        """
+        创建插件错误页面
+        
+        Args:
+            item_data: 菜单项数据
+            error_msg: 错误信息
+            
+        Returns:
+            错误页面部件
+        """
+        page = QWidget()
+        layout = QVBoxLayout(page)
+        layout.setContentsMargins(30, 30, 30, 30)
+        
+        # 错误图标和标题
+        title = QLabel("❌ 插件加载失败")
+        title_font = QFont()
+        title_font.setPointSize(18)
+        title_font.setBold(True)
+        title.setFont(title_font)
+        title.setStyleSheet("color: #f48771;")
+        layout.addWidget(title)
+        
+        # 插件名称
+        name = item_data.get("name", "未命名")
+        name_label = QLabel(f"插件: {name}")
+        name_label.setStyleSheet("color: #cccccc; margin-top: 10px;")
+        layout.addWidget(name_label)
+        
+        # 分隔线
+        line = QFrame()
+        line.setFrameShape(QFrame.HLine)
+        line.setStyleSheet("background-color: #c75450; max-height: 1px; margin: 20px 0;")
+        layout.addWidget(line)
+        
+        # 错误详情
+        error_label = QLabel("错误信息:")
+        error_label.setStyleSheet("color: #969696;")
+        layout.addWidget(error_label)
+        
+        error_text = QTextEdit()
+        error_text.setReadOnly(True)
+        error_text.setPlainText(error_msg)
+        error_text.setStyleSheet("""
+            QTextEdit {
+                border: 1px solid #c75450;
+                background-color: #2d1f1f;
+                color: #f48771;
+                padding: 15px;
+                font-family: 'Consolas', 'Monaco', monospace;
+            }
+        """)
+        layout.addWidget(error_text)
+        
+        # 配置信息
+        config_label = QLabel("配置信息:")
+        config_label.setStyleSheet("color: #969696; margin-top: 15px;")
+        layout.addWidget(config_label)
+        
+        config_text = QTextEdit()
+        config_text.setReadOnly(True)
+        config_text.setHtml(self._format_item_info(item_data))
+        config_text.setStyleSheet("""
+            QTextEdit {
+                border: 1px solid #333333;
+                background-color: #252526;
+                padding: 15px;
+                font-family: 'Consolas', 'Monaco', monospace;
+            }
+        """)
+        layout.addWidget(config_text)
+        
+        layout.addStretch()
+        return page
 
     def _create_plugin_placeholder_page(self, item_data: Dict[str, Any]) -> QWidget:
         """
