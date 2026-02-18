@@ -1,8 +1,8 @@
 """
-数据库连接测试工具 - Phase 7 更新版
+数据库连接测试工具 - Phase 8 更新版
 
 依赖安装:
-    pip install sqlalchemy pymysql oracledb pymssql pymongo
+    pip install sqlalchemy pymysql oracledb pymssql pymongo redis requests
 
 支持的数据库:
     - MySQL (mysql+pymysql://)
@@ -10,6 +10,8 @@
     - SQL Server (mssql+pymssql://)
     - Oracle (oracle+oracledb://) - 支持 Service Name 和 SID
     - MongoDB (pymongo)
+    - Redis (redis-py)
+    - Elasticsearch (requests)
 """
 
 from typing import Dict, Any, Tuple, Optional
@@ -43,9 +45,13 @@ def test_db_connection(profile: Dict[str, Any]) -> Tuple[bool, str]:
     try:
         db_type = profile.get("db_type", "").lower()
         
-        # MongoDB 特殊处理
+        # 特殊类型处理（非 SQLAlchemy）
         if db_type == "mongodb":
             return _test_mongodb_connection(profile)
+        elif db_type == "redis":
+            return _test_redis_connection(profile)
+        elif db_type == "elasticsearch":
+            return _test_elasticsearch_connection(profile)
         
         # 延迟导入 SQLAlchemy
         from sqlalchemy import create_engine, text
@@ -252,7 +258,9 @@ def _get_required_driver(db_type: str) -> str:
         "mariadb": "pymysql",
         "sqlserver": "pymssql",
         "oracle": "oracledb",
-        "mongodb": "pymongo"
+        "mongodb": "pymongo",
+        "redis": "redis",
+        "elasticsearch": "requests"
     }
     return drivers.get(db_type, f"{db_type} 驱动")
 
@@ -298,6 +306,113 @@ def _test_mongodb_connection(profile: Dict[str, Any]) -> Tuple[bool, str]:
         return False, f"MongoDB 连接失败: {str(e)}"
     except ImportError:
         return False, "缺少 pymongo 库，请执行: pip install pymongo"
+
+
+def _test_redis_connection(profile: Dict[str, Any]) -> Tuple[bool, str]:
+    """
+    测试 Redis 连接
+    
+    Args:
+        profile: 配置字典
+        
+    Returns:
+        (success, message)
+    """
+    try:
+        import redis
+        from redis.exceptions import RedisError
+        
+        host = profile.get("host", "localhost")
+        port = profile.get("port", 6379)
+        password = profile.get("password", "")
+        # Redis 数据库索引
+        try:
+            db = int(profile.get("database", 0))
+        except:
+            db = 0
+        
+        # 创建连接
+        r = redis.Redis(
+            host=host,
+            port=port,
+            password=password if password else None,
+            db=db,
+            socket_connect_timeout=5,
+            socket_timeout=5,
+            decode_responses=True
+        )
+        
+        # 测试连接
+        r.ping()
+        
+        # 获取服务器信息
+        info = r.info()
+        version = info.get("redis_version", "unknown")
+        mode = info.get("redis_mode", "standalone")
+        
+        r.close()
+        
+        return True, f"连接成功\nRedis 版本: {version}\n模式: {mode}"
+        
+    except RedisError as e:
+        return False, f"Redis 连接失败: {str(e)}"
+    except ImportError:
+        return False, "缺少 redis 库，请执行: pip install redis"
+
+
+def _test_elasticsearch_connection(profile: Dict[str, Any]) -> Tuple[bool, str]:
+    """
+    测试 Elasticsearch 连接
+    
+    Args:
+        profile: 配置字典
+        
+    Returns:
+        (success, message)
+    """
+    try:
+        import requests
+        from requests.auth import HTTPBasicAuth
+        
+        host = profile.get("host", "localhost")
+        port = profile.get("port", 9200)
+        username = profile.get("username", "")
+        password = profile.get("password", "")
+        
+        # 构建 URL
+        url = f"http://{host}:{port}"
+        
+        # 准备认证
+        auth = None
+        if username and password:
+            auth = HTTPBasicAuth(username, password)
+        
+        # 发送请求
+        response = requests.get(
+            url,
+            auth=auth,
+            timeout=5,
+            verify=False  # 忽略 SSL 验证（内网环境）
+        )
+        
+        if response.status_code == 200:
+            data = response.json()
+            cluster_name = data.get("cluster_name", "unknown")
+            version = data.get("version", {}).get("number", "unknown")
+            return True, f"连接成功\n集群: {cluster_name}\n版本: {version}"
+        elif response.status_code == 401:
+            return False, "Elasticsearch 认证失败：用户名或密码错误"
+        else:
+            return False, f"Elasticsearch 返回错误: HTTP {response.status_code}"
+            
+    except requests.exceptions.ConnectionError:
+        return False, "无法连接到 Elasticsearch，请检查主机和端口"
+    except requests.exceptions.Timeout:
+        return False, "连接超时，请检查网络状况"
+    except ImportError:
+        return False, "缺少 requests 库，请执行: pip install requests"
+    except Exception as e:
+        return False, f"Elasticsearch 连接异常: {str(e)}"
 
 
 # 用于异步执行的 Worker 类

@@ -64,18 +64,22 @@ class ConnectionManager:
     # 默认配置文件路径
     DEFAULT_CONFIG_PATH = "config/connections.json"
     
-    # 支持的数据库类型 (Phase 5 扩展)
+    # 支持的数据库类型 (Phase 8 扩展)
     # mysql: MySQL 5.7+ / 8.0+
     # mariadb: MariaDB 10.3+
     # sqlserver: SQL Server 2016+ (使用 pymssql)
     # oracle: Oracle 12c+ (使用 oracledb thin mode)
     # mongodb: MongoDB 4.0+ (使用 pymongo)
+    # redis: Redis 5.0+ (使用 redis-py)
+    # elasticsearch: Elasticsearch 7.x+ (使用 requests)
     SUPPORTED_DB_TYPES = [
         "mysql",
         "mariadb", 
         "sqlserver",
         "oracle",
-        "mongodb"
+        "mongodb",
+        "redis",
+        "elasticsearch"
     ]
     
     # 数据库类型显示名称映射

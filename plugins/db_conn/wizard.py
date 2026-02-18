@@ -30,12 +30,14 @@ class ConnectionWizard(QWidget):
     
     DEFAULT_PORTS = {
         "mysql": 3306, "mariadb": 3306,
-        "sqlserver": 1433, "oracle": 1521, "mongodb": 27017
+        "sqlserver": 1433, "oracle": 1521, "mongodb": 27017,
+        "redis": 6379, "elasticsearch": 9200
     }
     
     DB_TYPE_LABELS = {
         "mysql": "MySQL", "mariadb": "MariaDB",
-        "sqlserver": "SQL Server", "oracle": "Oracle", "mongodb": "MongoDB"
+        "sqlserver": "SQL Server", "oracle": "Oracle", "mongodb": "MongoDB",
+        "redis": "Redis", "elasticsearch": "Elasticsearch"
     }
     
     def __init__(self, title: str = "数据库连接配置", parent=None):
@@ -164,9 +166,30 @@ class ConnectionWizard(QWidget):
         oracle_layout.addLayout(form_oracle)
         oracle_layout.addStretch()
         
-        self.specific_stack.addWidget(self.page_db)
-        self.specific_stack.addWidget(self.page_mongo)
-        self.specific_stack.addWidget(self.page_oracle)
+        # Page 3: Redis (DB Index)
+        self.page_redis = QWidget()
+        form_redis = QFormLayout(self.page_redis)
+        self.redis_db_spin = QSpinBox()
+        self.redis_db_spin.setRange(0, 15)
+        self.redis_db_spin.setValue(0)
+        self.redis_db_spin.setSuffix(" 号库")
+        form_redis.addRow("数据库索引:", self.redis_db_spin)
+        hint_redis = QLabel("💡 Redis 数据库索引范围 0-15")
+        hint_redis.setStyleSheet("color: #6e6e6e; font-size: 11px;")
+        form_redis.addRow("", hint_redis)
+        
+        # Page 4: Elasticsearch (无额外配置，仅提示)
+        self.page_es = QWidget()
+        form_es = QFormLayout(self.page_es)
+        hint_es = QLabel("💡 Elasticsearch 使用 HTTP 协议连接\n如需身份验证，请填写用户名和密码")
+        hint_es.setStyleSheet("color: #6e6e6e; font-size: 11px;")
+        form_es.addRow("", hint_es)
+        
+        self.specific_stack.addWidget(self.page_db)      # 0
+        self.specific_stack.addWidget(self.page_mongo)   # 1
+        self.specific_stack.addWidget(self.page_oracle)  # 2
+        self.specific_stack.addWidget(self.page_redis)   # 3
+        self.specific_stack.addWidget(self.page_es)      # 4
         
         config_layout.addWidget(self.specific_stack)
         main_layout.addWidget(config_group)
@@ -225,11 +248,15 @@ class ConnectionWizard(QWidget):
         
         # 切换页面
         if db_type in ["mysql", "mariadb", "sqlserver"]:
-            self.specific_stack.setCurrentIndex(0)
+            self.specific_stack.setCurrentIndex(0)  # Database Name
         elif db_type == "mongodb":
-            self.specific_stack.setCurrentIndex(1)
+            self.specific_stack.setCurrentIndex(1)  # Auth Source
         elif db_type == "oracle":
-            self.specific_stack.setCurrentIndex(2)
+            self.specific_stack.setCurrentIndex(2)  # Service/SID
+        elif db_type == "redis":
+            self.specific_stack.setCurrentIndex(3)  # DB Index
+        elif db_type == "elasticsearch":
+            self.specific_stack.setCurrentIndex(4)  # ES Hint
     
     def _apply_styles(self):
         self.setStyleSheet("""
@@ -296,6 +323,11 @@ class ConnectionWizard(QWidget):
             else:
                 self.service_radio.setChecked(True)
             self.oracle_value_input.setText(p.get("oracle_value", "ORCL"))
+        elif db_type == "redis":
+            try:
+                self.redis_db_spin.setValue(int(p.get("database", 0)))
+            except:
+                self.redis_db_spin.setValue(0)
     
     def _on_delete_profile(self):
         index = self.profile_combo.currentIndex()
@@ -333,6 +365,10 @@ class ConnectionWizard(QWidget):
             data["oracle_mode"] = "sid" if self.sid_radio.isChecked() else "service_name"
             data["oracle_value"] = self.oracle_value_input.text().strip() or "ORCL"
             data["database"] = data["oracle_value"]
+        elif db_type == "redis":
+            data["database"] = str(self.redis_db_spin.value())
+        elif db_type == "elasticsearch":
+            data["database"] = ""  # ES 不需要数据库名
         
         return data
     
