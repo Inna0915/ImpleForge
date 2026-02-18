@@ -170,20 +170,20 @@
       "children": [
         {
           "id": "db_connection_wizard",
-          "name": "数据库连接配置",
+          "name": "数据源连接配置",
           "type": "plugin",
           "action": {
             "module_path": "db_conn.wizard",
             "class_name": "ConnectionWizard",
             "params": {
-              "title": "数据库连接配置"
+              "title": "数据源连接配置"
             }
           },
-          "description": "Navicat 风格数据库连接配置"
+          "description": "数据源连接配置"
         },
         {
           "id": "db_ops_dashboard",
-          "name": "运维仪表盘",
+          "name": "数据库运维仪表盘",
           "type": "plugin",
           "action": {
             "module_path": "db_ops.dashboard",

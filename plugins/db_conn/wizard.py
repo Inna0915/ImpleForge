@@ -76,15 +76,35 @@ class ConnectionWizard(QWidget):
         self.profile_combo.currentIndexChanged.connect(self._on_profile_selected)
         profiles_layout.addWidget(self.profile_combo)
         
-        self.refresh_btn = QPushButton("🔄")
-        self.refresh_btn.setFixedSize(32, 32)
+        # 刷新按钮 - 使用文字+图标
+        self.refresh_btn = QPushButton("刷新")
+        self.refresh_btn.setToolTip("刷新配置列表")
+        self.refresh_btn.setFixedSize(60, 32)
         self.refresh_btn.clicked.connect(self._load_profiles)
         profiles_layout.addWidget(self.refresh_btn)
         
-        self.delete_btn = QPushButton("🗑️")
-        self.delete_btn.setFixedSize(32, 32)
+        # 删除按钮 - 使用文字+图标
+        self.delete_btn = QPushButton("删除")
+        self.delete_btn.setToolTip("删除当前选中的配置")
+        self.delete_btn.setFixedSize(60, 32)
         self.delete_btn.clicked.connect(self._on_delete_profile)
         profiles_layout.addWidget(self.delete_btn)
+        
+        # 一键清空按钮
+        self.clear_all_btn = QPushButton("清空")
+        self.clear_all_btn.setToolTip("一键清空所有配置")
+        self.clear_all_btn.setFixedSize(60, 32)
+        self.clear_all_btn.setStyleSheet("""
+            QPushButton {
+                background-color: #c75450;
+                color: white;
+                border: none;
+                border-radius: 4px;
+            }
+            QPushButton:hover { background-color: #d96864; }
+        """)
+        self.clear_all_btn.clicked.connect(self._on_clear_all)
+        profiles_layout.addWidget(self.clear_all_btn)
         
         main_layout.addWidget(profiles_group)
         
@@ -282,6 +302,28 @@ class ConnectionWizard(QWidget):
                 font-weight: bold;
             }
         """)
+        
+        # 为配置管理按钮设置统一样式
+        btn_style = """
+            QPushButton {
+                background-color: #3c3c3c;
+                color: #cccccc;
+                border: 1px solid #505050;
+                border-radius: 4px;
+                font-size: 12px;
+            }
+            QPushButton:hover {
+                background-color: #505050;
+                border-color: #6e6e6e;
+            }
+            QPushButton:pressed {
+                background-color: #094771;
+                color: white;
+            }
+        """
+        self.refresh_btn.setStyleSheet(btn_style)
+        self.delete_btn.setStyleSheet(btn_style)
+        # 清空按钮已在创建时设置了红色样式
     
     def _load_profiles(self):
         self.profile_combo.clear()
@@ -340,6 +382,43 @@ class ConnectionWizard(QWidget):
             self.connection_manager.delete_profile(name)
             self._load_profiles()
             self._on_new()
+    
+    def _on_clear_all(self):
+        """一键清空所有配置"""
+        profiles = self.connection_manager.load_profiles()
+        if not profiles:
+            QMessageBox.information(self, "提示", "当前没有保存任何配置")
+            return
+        
+        count = len(profiles)
+        reply = QMessageBox.warning(
+            self,
+            "⚠️ 危险操作确认",
+            f"确定要删除所有 {count} 个配置吗？\n\n"
+            f"此操作不可恢复！\n\n"
+            f"配置列表:\n" +
+            "\n".join([f"  • {p.get('name', '未命名')}" for p in profiles[:10]]) +
+            (f"\n  ... 等共 {count} 个" if count > 10 else ""),
+            QMessageBox.Yes | QMessageBox.No,
+            QMessageBox.No
+        )
+        
+        if reply == QMessageBox.Yes:
+            # 逐个删除所有配置
+            success_count = 0
+            for profile in profiles:
+                name = profile.get("name", "")
+                if name and self.connection_manager.delete_profile(name):
+                    success_count += 1
+            
+            self._load_profiles()
+            self._on_new()
+            
+            QMessageBox.information(
+                self,
+                "清空完成",
+                f"已删除 {success_count}/{count} 个配置"
+            )
     
     def _get_form_data(self):
         db_type = self.type_combo.currentData()
