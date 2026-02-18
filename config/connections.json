@@ -2,82 +2,67 @@
   "version": "1.0",
   "profiles": [
     {
-      "id": "90a0e932",
-      "name": "mysql",
-      "host": "localhost",
-      "port": 3306,
-      "username": "root",
-      "password": "root",
-      "db_type": "mysql",
-      "database": "wms325",
-      "updated_at": "2026-02-18T07:43:04.340067",
-      "auth_source": "",
-      "oracle_mode": "",
-      "oracle_value": "",
-      "created_at": "2026-02-18T06:58:19.998879"
-    },
-    {
-      "id": "964aa654",
+      "id": "3c4429e3",
       "name": "redis",
       "host": "127.0.0.1",
       "port": 6379,
       "username": "",
       "password": "123456",
-      "db_type": "mysql",
+      "db_type": "redis",
       "database": "0",
-      "updated_at": "2026-02-18T09:33:57.319267",
+      "updated_at": "2026-02-18T10:10:23.813626",
       "auth_source": "",
       "oracle_mode": "",
       "oracle_value": "",
-      "created_at": "2026-02-18T09:33:57.319267"
+      "created_at": "2026-02-18T10:10:23.813626"
     },
     {
-      "id": "9927fdb0",
+      "id": "0de9470b",
       "name": "elasticsearch",
       "host": "127.0.0.1",
       "port": 9200,
       "username": "elastic",
       "password": "123456",
-      "db_type": "mysql",
+      "db_type": "elasticsearch",
       "database": "",
-      "updated_at": "2026-02-18T09:33:57.326655",
+      "updated_at": "2026-02-18T10:10:23.815585",
       "auth_source": "",
       "oracle_mode": "",
       "oracle_value": "",
-      "created_at": "2026-02-18T09:33:57.326655"
+      "created_at": "2026-02-18T10:10:23.815585"
     },
     {
-      "id": "d13289c5",
+      "id": "037db95d",
       "name": "elasticlog",
       "host": "localhost",
       "port": 9200,
       "username": "elastic",
       "password": "123456",
-      "db_type": "mysql",
+      "db_type": "elasticsearch",
       "database": "",
-      "updated_at": "2026-02-18T09:33:57.327630",
+      "updated_at": "2026-02-18T10:10:23.816563",
       "auth_source": "",
       "oracle_mode": "",
       "oracle_value": "",
-      "created_at": "2026-02-18T09:33:57.327630"
+      "created_at": "2026-02-18T10:10:23.816563"
     },
     {
-      "id": "09c5ac22",
+      "id": "283596e0",
       "name": "rabbitmq",
       "host": "127.0.0.1",
       "port": 5672,
       "username": "",
       "password": "123456",
-      "db_type": "mysql",
+      "db_type": "redis",
       "database": "0",
-      "updated_at": "2026-02-18T09:33:57.328602",
+      "updated_at": "2026-02-18T10:10:23.817555",
       "auth_source": "",
       "oracle_mode": "",
       "oracle_value": "",
-      "created_at": "2026-02-18T09:33:57.328602"
+      "created_at": "2026-02-18T10:10:23.817555"
     },
     {
-      "id": "61f3745b",
+      "id": "8ea29281",
       "name": "datasource",
       "host": "127.0.0.1",
       "port": 3306,
@@ -85,12 +70,12 @@
       "password": "root",
       "db_type": "mariadb",
       "database": "wms329",
-      "updated_at": "2026-02-18T09:33:57.329611",
+      "updated_at": "2026-02-18T10:10:23.818516",
       "auth_source": "",
       "oracle_mode": "",
       "oracle_value": "",
-      "created_at": "2026-02-18T09:33:57.329611"
+      "created_at": "2026-02-18T10:10:23.818516"
     }
   ],
-  "last_updated": "2026-02-18T09:33:57.329611"
+  "last_updated": "2026-02-18T10:10:23.818516"
 }

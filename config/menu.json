@@ -130,40 +130,6 @@
       ]
     },
     {
-      "id": "deployment",
-      "name": "部署工具",
-      "icon": "🚀",
-      "children": [
-        {
-          "id": "software_install",
-          "name": "软件安装",
-          "type": "plugin",
-          "action": {
-            "module_path": "demo_wizard.wizard",
-            "class_name": "DatabaseWizard",
-            "params": {
-              "title": "软件安装向导",
-              "default_host": "software-repo.company.com"
-            }
-          },
-          "description": "批量安装软件"
-        },
-        {
-          "id": "env_config",
-          "name": "环境配置",
-          "type": "plugin",
-          "action": {
-            "module_path": "demo_wizard.wizard",
-            "class_name": "DatabaseWizard",
-            "params": {
-              "title": "环境变量配置"
-            }
-          },
-          "description": "配置系统环境变量"
-        }
-      ]
-    },
-    {
       "id": "database",
       "name": "数据库工具",
       "icon": "🗄️",
@@ -193,6 +159,19 @@
             }
           },
           "description": "数据库运维操作面板（死锁、Binlog、数据泵等）"
+        },
+        {
+          "id": "es_manager",
+          "name": "ES 管理器",
+          "type": "plugin",
+          "action": {
+            "module_path": "es_manager.manager",
+            "class_name": "ESManagerWidget",
+            "params": {
+              "title": "Elasticsearch 管理器"
+            }
+          },
+          "description": "Elasticsearch 索引和文档管理（CRUD、分页浏览）"
         }
       ]
     }
