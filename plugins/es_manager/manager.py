@@ -238,7 +238,7 @@ class ESManagerWidget(QWidget):
         
         # ===== 右侧：文档表格 =====
         right_widget = QWidget()
-        right_layout = VBoxLayout(right_widget)
+        right_layout = QVBoxLayout(right_widget)
         right_layout.setContentsMargins(0, 0, 0, 0)
         
         # 当前索引显示
