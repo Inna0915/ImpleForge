@@ -293,6 +293,7 @@ class ConnectionManager:
         Returns:
             配置名称列表
         """
+        self._load_config()  # 确保获取最新数据
         return [p.get("name", "未命名") for p in self._profiles]
     
     def export_to_dict(self, include_passwords: bool = False) -> Dict[str, Any]:

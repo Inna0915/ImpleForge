@@ -391,7 +391,11 @@ class ConnectionWizard(QWidget):
         self.status_label.setText("新建配置")
     
     def _on_import_yaml(self):
-        """从 YAML 文件导入配置"""
+        """
+        批量导入 YAML 配置
+        
+        Phase 8 更新：自动识别并保存所有数据库连接
+        """
         file_path, _ = QFileDialog.getOpenFileName(
             self,
             "选择 YAML 配置文件",
@@ -404,28 +408,75 @@ class ConnectionWizard(QWidget):
         
         try:
             importer = YamlConfigImporter()
-            config = importer.parse(file_path)
+            configs = importer.parse_all(file_path)
             
-            # 填充表单
-            self._fill_form_from_config(config)
+            if not configs:
+                QMessageBox.warning(
+                    self,
+                    "导入失败",
+                    "未在文件中找到有效的数据库连接配置"
+                )
+                return
             
-            # 设置配置名称（从文件名推断）
-            filename = Path(file_path).stem
-            self.name_input.setText(f"{filename}_imported")
+            # 批量保存配置
+            saved_count = 0
+            failed_count = 0
+            saved_names = []
+            failed_names = []
             
-            # 显示成功提示
-            self.status_label.setText(f"已从 {Path(file_path).name} 加载配置")
-            self.status_label.setStyleSheet("color: #4ec9b0;")
+            for config in configs:
+                # 检查是否已存在同名配置，如果存在则添加随机后缀
+                original_name = config['name']
+                name = original_name
+                counter = 1
+                
+                # 命名策略：检查重名，添加序号
+                existing_names = self.connection_manager.get_profile_names()
+                while name in existing_names:
+                    name = f"{original_name}_{counter}"
+                    counter += 1
+                
+                config['name'] = name
+                
+                # 保存配置
+                try:
+                    if self.connection_manager.save_profile(**config):
+                        saved_count += 1
+                        saved_names.append(name)
+                    else:
+                        failed_count += 1
+                        failed_names.append(name)
+                except Exception as e:
+                    failed_count += 1
+                    failed_names.append(f"{name}({str(e)[:30]})")
             
-            QMessageBox.information(
-                self,
-                "导入成功",
-                f"已从 {Path(file_path).name} 加载数据库配置\n\n"
-                f"类型: {config.get('type', 'unknown')}\n"
-                f"主机: {config.get('host', 'localhost')}\n"
-                f"端口: {config.get('port', 3306)}\n\n"
-                f"请检查信息并点击 [保存] 存储配置。"
-            )
+            # 刷新配置列表
+            self._load_profiles()
+            
+            # 构建结果消息
+            summary = importer.get_summary()
+            msg = f"导入完成！\n\n"
+            msg += f"发现配置: {len(configs)} 个\n"
+            msg += f"类型分布: {summary}\n"
+            msg += f"保存成功: {saved_count} 个\n"
+            
+            if saved_names:
+                msg += f"\n已保存配置:\n"
+                for name in saved_names[:10]:  # 最多显示10个
+                    msg += f"  ✓ {name}\n"
+                if len(saved_names) > 10:
+                    msg += f"  ... 等共 {len(saved_names)} 个\n"
+            
+            if failed_count > 0:
+                msg += f"\n保存失败: {failed_count} 个\n"
+                for name in failed_names[:5]:
+                    msg += f"  ✗ {name}\n"
+            
+            # 显示结果
+            self.status_label.setText(f"已导入 {saved_count} 个配置")
+            self.status_label.setStyleSheet("color: #4ec9b0;" if failed_count == 0 else "color: #dcdcaa;")
+            
+            QMessageBox.information(self, "批量导入完成", msg)
             
         except ImportError as e:
             QMessageBox.warning(
@@ -437,42 +488,8 @@ class ConnectionWizard(QWidget):
             QMessageBox.warning(
                 self,
                 "导入失败",
-                f"无法解析配置文件:\n{str(e)}\n\n"
-                f"请确保文件包含有效的数据库连接信息:\n"
-                f"- JDBC URL (如 jdbc:mysql://host:port/db)\n"
-                f"- 或 host/port/user 等字段"
+                f"无法解析配置文件:\n{str(e)}"
             )
-    
-    def _fill_form_from_config(self, config: dict):
-        """根据配置字典填充表单"""
-        # 数据库类型
-        db_type = config.get('type', 'mysql').lower()
-        type_index = self.type_combo.findData(db_type)
-        if type_index >= 0:
-            self.type_combo.setCurrentIndex(type_index)
-        
-        # 基本配置
-        self.host_input.setText(config.get('host', 'localhost'))
-        self.port_input.setValue(config.get('port', 3306))
-        self.username_input.setText(config.get('username', ''))
-        self.password_input.setText(config.get('password', ''))
-        
-        # 数据库特定配置
-        if db_type in ['mysql', 'mariadb', 'sqlserver']:
-            self.dbname_input.setText(config.get('database', ''))
-        elif db_type == 'mongodb':
-            self.auth_source_input.setText(config.get('auth_source', 'admin'))
-        elif db_type == 'oracle':
-            # Oracle 特殊处理
-            oracle_mode = config.get('oracle_mode', 'service_name')
-            oracle_value = config.get('oracle_value', config.get('database', 'ORCL'))
-            
-            if oracle_mode == 'sid':
-                self.sid_radio.setChecked(True)
-            else:
-                self.service_radio.setChecked(True)
-            
-            self.oracle_value_input.setText(oracle_value)
 
 
 if __name__ == "__main__":
